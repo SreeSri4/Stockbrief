@@ -9,130 +9,60 @@ export default async function handler(req, res) {
     const prompt = `
 You are a professional equity research analyst.
 
-Research the stock ticker "${ticker}" using web search.
+Research stock "${ticker}" and return ONLY valid JSON.
 
-Return ONLY valid JSON.
-Do NOT include:
-- markdown
-- code blocks
-- explanations
-- text before or after JSON
+No markdown. No explanation.
 
-Ensure JSON is strictly valid and parsable.
-
-Use this exact schema:
-
+Use structured format like:
 {
   "ticker": "...",
-  "exchange": "...",
   "company": "...",
-  "sector": "...",
-  "description": "...",
   "currentPrice": "...",
-  "currency": "...",
-  "priceChange": "...",
-  "priceChangeDir": "up|down|neutral",
-  "week52High": "...",
-  "week52Low": "...",
-  "week52Position": 70,
   "marketCap": "...",
   "pe": "...",
-  "pb": "...",
-  "eps": "...",
-  "roe": "...",
-  "divYield": "...",
-  "analystRating": "...",
-  "avgTarget": "...",
-  "upsidePercent": "...",
-  "upsideDir": "up|down",
-  "ytdPerformance": "...",
-  "ytdDir": "up|down|neutral",
-  "metrics": [],
-  "recentResults": {
-    "period": "...",
-    "highlights": []
-  },
+  "description": "...",
   "catalysts": [],
-  "risks": [],
-  "analystBreakdown": {
-    "buy": 0,
-    "hold": 0,
-    "sell": 0
-  },
-  "priceTargets": [],
-  "technicalSignal": "...",
-  "movingAvg50": "...",
-  "movingAvg200": "...",
-  "technicalNote": "...",
-  "reportDate": "March 26, 2026"
+  "risks": []
 }
 `;
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01"
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{ role: "user", content: prompt }]
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        messages: [
+          { role: "user", content: prompt }
+        ]
       })
     });
 
     const data = await response.json();
 
-    // 🔍 Debug log (check in Vercel logs if needed)
-    console.log("RAW AI RESPONSE:", JSON.stringify(data, null, 2));
-
-    // ✅ Extract text safely
-    let text = "";
-
-    if (data.content && Array.isArray(data.content)) {
-      for (const block of data.content) {
-        if (block.type === "text") {
-          text += block.text;
-        }
-      }
-    }
-
-    // Clean formatting
-    text = text.replace(/```json|```/g, "").trim();
+    const text = data.choices?.[0]?.message?.content || "";
 
     let parsed;
 
-    // ✅ Try direct parse
     try {
       parsed = JSON.parse(text);
-    } catch (err) {
-      // ✅ Fallback extraction
+    } catch {
       const match = text.match(/\{[\s\S]*\}/);
-
       if (!match) {
         return res.status(500).json({
           error: "Parsing failed",
           preview: text.substring(0, 300)
         });
       }
-
-      try {
-        parsed = JSON.parse(match[0]);
-      } catch (e) {
-        return res.status(500).json({
-          error: "JSON parse failed",
-          preview: match[0].substring(0, 300)
-        });
-      }
+      parsed = JSON.parse(match[0]);
     }
 
-    return res.status(200).json(parsed);
+    res.status(200).json(parsed);
 
   } catch (err) {
-    return res.status(500).json({
-      error: err.message || "Server error"
-    });
+    res.status(500).json({ error: err.message });
   }
 }
