@@ -448,16 +448,10 @@ If you cannot find some data, use "N/A" as the value. Base all data on the most 
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${response.status}`);
+      throw new Error(err.error || "API error");
     }
-
-    const data = await response.json();
-    const textBlocks = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-    const cleaned = textBlocks.replace(/```json|```/g,'').trim();
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Could not parse report data. Please try again.');
-
-    const d = JSON.parse(jsonMatch[0]);
+    
+    const d = await response.json();
     hideLoader();
     renderReport(d);
   } catch (err) {
